@@ -7,13 +7,11 @@ package server;
 
 import java.io.*;
 import java.net.*;
+import java.nio.ByteBuffer;
 import java.util.Properties;
 import java.util.Random;
 
-import javax.net.ssl.SSLServerSocket;
-import javax.net.ssl.SSLSocket;
-
-import dtls.DTLSImpl;
+import dtls.DTLSSocket;
 
 class hjStreamServer {
 	
@@ -23,8 +21,7 @@ class hjStreamServer {
 	static public void main( String []args ) throws Exception {
 		if (args.length != 5)
 		{
-			System.out.println("Erro, usar: SSPStreamServer <movie> <ip-multicast-address> <port> <keystore-name> <keystore-pass>");
-			System.out.println("        or: SSPStreamServer <movie> <ip-unicast-address> <port> <keystore-name> <keystore-pass>");
+			System.out.println("Erro, usar: SSPStreamServer <movie> <proxy-ip:port> <server-ip:port> <keystore-name> <keystore-pass>");
 			System.exit(-1);
 		}
 		InputStream dtlsconf = new FileInputStream("src/main/java/dtls.conf");
@@ -32,6 +29,9 @@ class hjStreamServer {
 			System.err.println("dtls.conf file not found!");
 			System.exit(1);
 		}
+		SocketAddress proxyAddr = parseSocketAddress(args[1]);
+		SocketAddress serverAddr = parseSocketAddress(args[2]);
+		
 		String ksName = null;
 		String ksPass = null;
 		
@@ -41,7 +41,7 @@ class hjStreamServer {
 		}
 		
 		
-		String peerType = "SERVER";
+		String sideType = "SERVER";
 		
 		Properties properties = new Properties();
 		properties.load(dtlsconf);
@@ -50,33 +50,24 @@ class hjStreamServer {
 		String ciphersuites = properties.getProperty("CIPHERSUITES");
 		String[] listCiphers = ciphersuites.split(",");
 		
-		
-		
-
 		int size;
 		int count = 0;
 		long time;
 		DataInputStream g = new DataInputStream( new FileInputStream(args[0]) );
 		byte[] buff = new byte[4096];
-
-		InetSocketAddress addr = new InetSocketAddress( args[1], Integer.parseInt(args[2]));
-		//DatagramPacket p = new DatagramPacket(buff, buff.length, addr );
+		
 		long t0 = System.nanoTime(); // tempo de referencia para este processo
 		long q0 = 0;
 		
-		DTLSImpl imp = null;
+		// has to be done internally
+		DatagramSocket serverSock = new DatagramSocket(serverAddr);
+		
+		DTLSSocket imp = null;
 		try {
-		imp = new DTLSImpl(protocol,peerType, authType, listCiphers, ksName, ksPass, addr);
+			imp = new DTLSSocket(protocol,sideType, authType, listCiphers, ksName, ksPass, serverSock, proxyAddr);
 		} catch(Exception ex) {
 			ex.printStackTrace();
 		}
-		// has to be done internally
-		//DatagramSocket inSocket = new DatagramSocket(inSocketAddress);
-		SSLServerSocket ss = imp.getServSocket();
-		SSLSocket s = (SSLSocket) ss.accept();
-		
-		OutputStream os = s.getOutputStream();
-		
 		while ( g.available() > 0 ) {
 			buff = new byte[4096];
 			Random r = new Random();
@@ -92,11 +83,19 @@ class hjStreamServer {
 			Thread.sleep( Math.max(0, ((time-q0)-(t-t0))/1000000) );
 			// send packet (with a frame payload)
 			// Frames sent in clear (no encryption)
-			os.write(buff,0,size);
+			ByteBuffer frame = ByteBuffer.wrap(buff);
+			imp.send(frame);
 			System.out.print( "." );
 		}
 		g.close();
-		s.close();
+		serverSock.close();
 		System.out.println("DONE! all frames sent: "+count);
+	}
+	
+	private static InetSocketAddress parseSocketAddress(String socketAddress) {
+		String[] split = socketAddress.split(":");
+		String host = split[0];
+		int port = Integer.parseInt(split[1]);
+		return new InetSocketAddress(host, port);
 	}
 }
