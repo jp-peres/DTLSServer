@@ -1,5 +1,10 @@
 package dtls;
 
+/*
+ * Created by
+ * Joao Peres n 48320, Luis Silva 54449 
+ */
+
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.FileInputStream;
@@ -65,7 +70,7 @@ public class DTLSSocket {
 			kmf.init(ks, ksPass.toCharArray());
 			TrustManagerFactory tmf = TrustManagerFactory.getInstance("SunX509");
 			tmf.init(ksTrust);
-
+			
 			res = SSLContext.getInstance(protocol);
 			res.init(kmf.getKeyManagers(), tmf.getTrustManagers(), null);
 		} catch (Exception ex) {
@@ -107,6 +112,7 @@ public class DTLSSocket {
 		boolean endLoops = false;
 		int loops = MAX_HANDSHAKE_LOOPS;
 		sslEng.beginHandshake();
+		System.out.println("SERVER:Handshake has STARTED");
 		while (!endLoops && (serverException == null) && (clientException == null)) {
 
 			if (--loops < 0) {
@@ -116,7 +122,7 @@ public class DTLSSocket {
 			HandshakeStatus hs = sslEng.getHandshakeStatus();
 			if (hs == SSLEngineResult.HandshakeStatus.NEED_UNWRAP
 					|| hs == SSLEngineResult.HandshakeStatus.NEED_UNWRAP_AGAIN) {
-				System.out.println(selfType + ":" + "Received DTLS records, handshake status is " + hs);
+				//System.out.println(selfType + ":" + "Received DTLS records, handshake status is " + hs);
 				ByteBuffer iNet;
 				ByteBuffer iApp;
 				if (hs == SSLEngineResult.HandshakeStatus.NEED_UNWRAP) {
@@ -168,7 +174,7 @@ public class DTLSSocket {
 					// bad packet, or the client maximum fragment size
 					// config does not work?
 					if (hs != SSLEngineResult.HandshakeStatus.NOT_HANDSHAKING) {
-						System.out.println("here");
+						//System.out.println("here");
 						// throw new Exception("Buffer underflow: " + "incorrect client maximum fragment
 						// size");
 					} // otherwise, ignore this packet
@@ -220,10 +226,8 @@ public class DTLSSocket {
 		if (session == null) {
 			throw new Exception("Handshake finished, but session is null");
 		}
-		// System.out.println(selfType+":Negotiated protocol is " +
-		// session.getProtocol());
-		// System.out.println(selfType+":Negotiated cipher suite is " +
-		// session.getCipherSuite());
+		System.out.println(selfType+":Negotiated protocol is " + session.getProtocol());
+		System.out.println(selfType+":Negotiated cipher suite is " + session.getCipherSuite());
 
 		// handshake status should be NOT_HANDSHAKING
 		//
@@ -297,7 +301,7 @@ public class DTLSSocket {
 			SSLEngineResult rs = sslEng.unwrap(netBuffer, recBuffer);
 			recBuffer.flip();
 			if (recBuffer.remaining() != 0) {
-				System.out.println("Received application data... " + recBuffer);
+				//System.out.println("Received application data... " + recBuffer);
 				byte[] received = new byte[recBuffer.remaining()];
 				recBuffer.get(received);
 
@@ -399,43 +403,6 @@ public class DTLSSocket {
 		}
 		return false;
 	}
-
-//	
-//    // produce application packets
-//    List<DatagramPacket> produceApplicationPackets(ByteBuffer source) throws Exception {
-//
-//        List<DatagramPacket> packets = new ArrayList<>();
-//        ByteBuffer appNet = ByteBuffer.allocate(32768);
-//        SSLEngineResult r = sslEng.wrap(source, appNet);
-//        appNet.flip();
-//
-//        SSLEngineResult.Status rs = r.getStatus();
-//        if (rs == SSLEngineResult.Status.BUFFER_OVERFLOW) {
-//            // the client maximum fragment size config does not work?
-//            throw new Exception("Buffer overflow: " +
-//                        "incorrect server maximum fragment size");
-//        } else if (rs == SSLEngineResult.Status.BUFFER_UNDERFLOW) {
-//            // unlikely
-//            throw new Exception("Buffer underflow during wraping");
-//        } else if (rs == SSLEngineResult.Status.CLOSED) {
-//                throw new Exception("SSLEngine has closed");
-//        } else if (rs == SSLEngineResult.Status.OK) {
-//            // OK
-//        } else {
-//            throw new Exception("Can't reach here, result is " + rs);
-//        }
-//
-//        // SSLEngineResult.Status.OK:
-//        if (appNet.hasRemaining()) {
-//            byte[] ba = new byte[appNet.remaining()];
-//            appNet.get(ba);
-//            DatagramPacket packet =
-//                    new DatagramPacket(ba, ba.length, otherAddr);
-//            packets.add(packet);
-//        }
-//
-//        return packets;
-//    }
 
 	// Runs needed tasks required by the handshake
 	void runDelegatedTasks() throws Exception {

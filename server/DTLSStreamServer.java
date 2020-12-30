@@ -1,8 +1,8 @@
 package server;
+
 /*
- * hjStreamServer.java 
- * Streaming server: streams video frames in UDP packets
- * for clients to play in real time the transmitted movies
+ * Created by
+ * Joao Peres n 48320, Luis Silva 54449 
  */
 
 import java.io.*;
@@ -13,7 +13,7 @@ import java.util.Random;
 
 import dtls.DTLSSocket;
 
-class hjStreamServer {
+class DTLSStreamServer {
 	
 	private static final int ID_LENGTH = 6;
 	private static final int NONCE_LENGTH = 4;
@@ -21,12 +21,12 @@ class hjStreamServer {
 	static public void main( String []args ) throws Exception {
 		if (args.length != 7)
 		{
-			System.out.println("Erro, usar: SSPStreamServer <movie> <proxy-ip:port> <server-ip:port> <keystore-name> <keystore-pass> <truststore-name> <truststore-pass>");
+			System.out.println("Erro, usar: DTLSStreamServer <movie> <proxy-ip:port> <server-ip:port> <keystore-name> <keystore-pass> <truststore-name> <truststore-pass>");
 			System.exit(-1);
 		}
 		InputStream dtlsconf = null;
 		try {
-			dtlsconf = new FileInputStream("src/main/java/dtls.conf");
+			dtlsconf = new FileInputStream("dtls.conf");
 		} 
 		catch(Exception ex) {
 			System.err.println("dtls.conf file not found!");
@@ -41,7 +41,7 @@ class hjStreamServer {
 		String tsPass = args[6];
 		
 		String sideType = "SERVER";
-		
+		//TLS_ECDH_ECDSA_WITH_AES_256_GCM_SHA384,TLS_ECDH_RSA_WITH_AES_256_GCM_SHA384,TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384
 		Properties properties = new Properties();
 		properties.load(dtlsconf);
 		String protocol = properties.getProperty("TLS-PROT-ENF");
