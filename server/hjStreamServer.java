@@ -19,27 +19,26 @@ class hjStreamServer {
 	private static final int NONCE_LENGTH = 4;
 	
 	static public void main( String []args ) throws Exception {
-		if (args.length != 5)
+		if (args.length != 7)
 		{
-			System.out.println("Erro, usar: SSPStreamServer <movie> <proxy-ip:port> <server-ip:port> <keystore-name> <keystore-pass>");
+			System.out.println("Erro, usar: SSPStreamServer <movie> <proxy-ip:port> <server-ip:port> <keystore-name> <keystore-pass> <truststore-name> <truststore-pass>");
 			System.exit(-1);
 		}
-		InputStream dtlsconf = new FileInputStream("src/main/java/dtls.conf");
-		if (dtlsconf == null) {
+		InputStream dtlsconf = null;
+		try {
+			dtlsconf = new FileInputStream("src/main/java/dtls.conf");
+		} 
+		catch(Exception ex) {
 			System.err.println("dtls.conf file not found!");
 			System.exit(1);
 		}
 		SocketAddress proxyAddr = parseSocketAddress(args[1]);
 		SocketAddress serverAddr = parseSocketAddress(args[2]);
 		
-		String ksName = null;
-		String ksPass = null;
-		
-		if (args.length == 5) {
-			ksName = args[3];
-			ksPass = args[4];
-		}
-		
+		String ksName = args[3];
+		String ksPass = args[4];
+		String tsName = args[5];
+		String tsPass = args[6];
 		
 		String sideType = "SERVER";
 		
@@ -64,7 +63,7 @@ class hjStreamServer {
 		
 		DTLSSocket imp = null;
 		try {
-			imp = new DTLSSocket(protocol,sideType, authType, listCiphers, ksName, ksPass, serverSock, proxyAddr);
+			imp = new DTLSSocket(protocol,sideType, authType, listCiphers, ksName, ksPass, tsName, tsPass, serverSock, proxyAddr);
 		} catch(Exception ex) {
 			ex.printStackTrace();
 		}
@@ -77,14 +76,11 @@ class hjStreamServer {
 			count += 1;
 
 			g.readFully(buff, 0, size);
-			//p.setData(buff,0,size);
-			//p.setSocketAddress( addr );
 			long t = System.nanoTime();
 			Thread.sleep( Math.max(0, ((time-q0)-(t-t0))/1000000) );
-			// send packet (with a frame payload)
-			// Frames sent in clear (no encryption)
-			ByteBuffer frame = ByteBuffer.wrap(buff);
-			imp.send(frame);
+
+			// send buffer
+			imp.send(buff,size);
 			System.out.print( "." );
 		}
 		g.close();
