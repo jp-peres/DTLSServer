@@ -13,8 +13,11 @@
 - make sure paths for our key/truststores are correct
 
 To run DTLSProxy jar, use either (Proxy ID 48320 with pass jpjpjp or 54449 with pass lcdlcdlcd)
+
 Example:
+
 java -jar DTLSProxy-0.0.1.jar 54449 lcdlcdlcd movies/cars.dat  clientkeystore.jks jplcdlcd clienttruststore.jks jplcdlcd
 
 To run DTLSServer jar:
+
 java -jar DTLSServer-0.0.1.jar localhost:9999 localhost:8888 serverkeystore.jks jplcdlcd servertruststore.jks jplcdlcd
