@@ -2,7 +2,7 @@ package dtls;
 
 /*
  * Created by
- * Joao Peres n 48320, Luis Silva 54449 
+ * Joao Peres n 48320, Luis Silva n 54449 
  */
 
 import java.io.ByteArrayInputStream;
@@ -15,10 +15,24 @@ import java.net.DatagramSocket;
 import java.net.SocketAddress;
 import java.net.SocketTimeoutException;
 import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
+import java.security.InvalidAlgorithmParameterException;
+import java.security.InvalidKeyException;
+import java.security.Key;
 import java.security.KeyStore;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.security.spec.InvalidKeySpecException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
+import javax.crypto.Cipher;
+import javax.crypto.NoSuchPaddingException;
+import javax.crypto.SecretKeyFactory;
+import javax.crypto.spec.IvParameterSpec;
+import javax.crypto.spec.PBEKeySpec;
+import javax.crypto.spec.PBEParameterSpec;
 import javax.net.ssl.KeyManagerFactory;
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLEngine;
@@ -44,6 +58,13 @@ public class DTLSSocket {
 	private static int MAX_APP_READ_LOOPS = 60;
 	private static int BUFFER_SIZE = 5 * 1024;
 	private static int MAXIMUM_PACKET_SIZE = 5 * 1024;
+	// SHP constants
+	private static final int MOVIE_ID_LEN = 30;
+	private static final int PROXY_ID_LEN = 5;
+	private static String digits = "0123456789abcdef";
+    private byte[] salt = new byte[] { (byte)0x7d, 0x60, 0x43, (byte)0x5f, 0x02, (byte) 0xe9, (byte) 0xe0, (byte) 0xae };
+    private int iterCount = 2048;
+    private static final String PBESUITE = "PBEWithHmacSHA224AndAES_256";
 
 	public DTLSSocket(String protocolVersion, String sideType, String authType, String[] cipherSuites, String ksName,
 			String ksPass, String tsName, String tsPass, DatagramSocket sock, SocketAddress otherSideAddr)
@@ -70,7 +91,7 @@ public class DTLSSocket {
 			kmf.init(ks, ksPass.toCharArray());
 			TrustManagerFactory tmf = TrustManagerFactory.getInstance("SunX509");
 			tmf.init(ksTrust);
-			
+
 			res = SSLContext.getInstance(protocol);
 			res.init(kmf.getKeyManagers(), tmf.getTrustManagers(), null);
 		} catch (Exception ex) {
@@ -112,7 +133,7 @@ public class DTLSSocket {
 		boolean endLoops = false;
 		int loops = MAX_HANDSHAKE_LOOPS;
 		sslEng.beginHandshake();
-		System.out.println("SERVER:Handshake has STARTED");
+		System.out.println(selfType+":Handshake has STARTED");
 		while (!endLoops && (serverException == null) && (clientException == null)) {
 
 			if (--loops < 0) {
@@ -122,7 +143,8 @@ public class DTLSSocket {
 			HandshakeStatus hs = sslEng.getHandshakeStatus();
 			if (hs == SSLEngineResult.HandshakeStatus.NEED_UNWRAP
 					|| hs == SSLEngineResult.HandshakeStatus.NEED_UNWRAP_AGAIN) {
-				//System.out.println(selfType + ":" + "Received DTLS records, handshake status is " + hs);
+				// System.out.println(selfType + ":" + "Received DTLS records, handshake status
+				// is " + hs);
 				ByteBuffer iNet;
 				ByteBuffer iApp;
 				if (hs == SSLEngineResult.HandshakeStatus.NEED_UNWRAP) {
@@ -174,7 +196,7 @@ public class DTLSSocket {
 					// bad packet, or the client maximum fragment size
 					// config does not work?
 					if (hs != SSLEngineResult.HandshakeStatus.NOT_HANDSHAKING) {
-						//System.out.println("here");
+						// System.out.println("here");
 						// throw new Exception("Buffer underflow: " + "incorrect client maximum fragment
 						// size");
 					} // otherwise, ignore this packet
@@ -226,8 +248,8 @@ public class DTLSSocket {
 		if (session == null) {
 			throw new Exception("Handshake finished, but session is null");
 		}
-		System.out.println(selfType+":Negotiated protocol is " + session.getProtocol());
-		System.out.println(selfType+":Negotiated cipher suite is " + session.getCipherSuite());
+		System.out.println(selfType + ":Negotiated protocol is " + session.getProtocol());
+		System.out.println(selfType + ":Negotiated cipher suite is " + session.getCipherSuite());
 
 		// handshake status should be NOT_HANDSHAKING
 		//
@@ -247,10 +269,11 @@ public class DTLSSocket {
 			oos.flush();
 			byte[] res = baos.toByteArray();
 
-			// System.out.println("Sending frame: "+ new
-			// String(src.array(),StandardCharsets.UTF_8));
+			
 			// Note: have not consider the packet loses
 			ByteBuffer src = ByteBuffer.wrap(res, 0, res.length);
+			//System.out.println("Sending frame: "+ new String(src.array(),StandardCharsets.UTF_8));
+			//System.out.println("With size: " + src.array().length);
 			ByteBuffer appNet = ByteBuffer.allocate(32768);
 			SSLEngineResult r = sslEng.wrap(src, appNet);
 			appNet.flip();
@@ -274,8 +297,8 @@ public class DTLSSocket {
 			if (appNet.hasRemaining()) {
 				byte[] ba = new byte[appNet.remaining()];
 				appNet.get(ba);
-				// System.out.println("frame for socket: "+ new
-				// String(ba,StandardCharsets.UTF_8));
+				//System.out.println("Sending frame: "+ new String(ba,StandardCharsets.UTF_8));
+				//System.out.println("With size: " + src.array().length);
 				DatagramPacket packet = new DatagramPacket(ba, ba.length, otherAddr);
 				dSocket.send(packet);
 			}
@@ -294,14 +317,14 @@ public class DTLSSocket {
 			byte[] buf = new byte[BUFFER_SIZE];
 			DatagramPacket packet = new DatagramPacket(buf, buf.length);
 			dSocket.receive(packet);
-			// System.out.println("Received frame: "+ new
-			// String(packet.getData(),StandardCharsets.UTF_8));
+			//System.out.println("Received frame: "+ new String(packet.getData(),StandardCharsets.UTF_8));
+			//System.out.println("With size: "+ packet.getLength());
 			ByteBuffer netBuffer = ByteBuffer.wrap(buf, 0, packet.getLength());
 			ByteBuffer recBuffer = ByteBuffer.allocate(BUFFER_SIZE);
 			SSLEngineResult rs = sslEng.unwrap(netBuffer, recBuffer);
 			recBuffer.flip();
 			if (recBuffer.remaining() != 0) {
-				//System.out.println("Received application data... " + recBuffer);
+				// System.out.println("Received application data... " + recBuffer);
 				byte[] received = new byte[recBuffer.remaining()];
 				recBuffer.get(received);
 
@@ -414,5 +437,93 @@ public class DTLSSocket {
 		if (hs == HandshakeStatus.NEED_TASK) {
 			throw new Exception("handshake shouldn't need additional tasks");
 		}
+	}
+
+	public byte[] generateProxyPassMoviePayload(String proxy, String pass, String movie) throws Exception {
+		byte[] pbePayload = new byte[BUFFER_SIZE];
+		if (proxy.length() != 5)
+			throw new Exception("ProxyID must be comprised of 5 characters.");
+		
+		byte[] proxyBytes = ByteBuffer.allocate(PROXY_ID_LEN).put(proxy.getBytes()).array();
+		byte[] movieBytes = ByteBuffer.allocate(MOVIE_ID_LEN).put(movie.getBytes()).array();
+
+		System.arraycopy(proxyBytes, 0, pbePayload, 0, PROXY_ID_LEN);
+		System.arraycopy(movieBytes, 0, pbePayload, PROXY_ID_LEN, MOVIE_ID_LEN);
+
+		byte[] hashInput = new byte[PROXY_ID_LEN + MOVIE_ID_LEN];
+		System.arraycopy(pbePayload, 0, hashInput, 0, hashInput.length);
+		MessageDigest dg = MessageDigest.getInstance("SHA-1");
+		byte[] hashDig = dg.digest(hashInput);
+
+		MessageDigest pwdHash;
+		pwdHash = MessageDigest.getInstance("SHA-256");
+		pwdHash.update(pass.getBytes());
+		byte[] hashPass = pwdHash.digest();
+		String hash = toHex(hashPass, hashPass.length);
+		
+		Cipher cipher = getPBECipher(hash, Cipher.ENCRYPT_MODE);
+		byte[] finalCipher = cipher.doFinal(hashDig, 0, hashDig.length);
+		
+		System.arraycopy(finalCipher, 0, pbePayload, PROXY_ID_LEN + MOVIE_ID_LEN, finalCipher.length);
+		
+		byte[] payload = new byte[PROXY_ID_LEN+MOVIE_ID_LEN+finalCipher.length];
+		System.arraycopy(pbePayload, 0, payload, 0, PROXY_ID_LEN + MOVIE_ID_LEN + finalCipher.length);
+		return payload;
+	}
+
+	public Cipher getPBECipher(String hash, int mode) throws NoSuchAlgorithmException,
+			NoSuchPaddingException, InvalidKeySpecException, InvalidKeyException, InvalidAlgorithmParameterException {
+		PBEParameterSpec pSpec;
+		PBEKeySpec pbeKeySpec;
+		Key skey;
+		SecretKeyFactory keyFact = SecretKeyFactory.getInstance("PBEWithHmacSHA224AndAES_256");
+		Cipher cipher = Cipher.getInstance("PBEWithHmacSHA224AndAES_256");
+		IvParameterSpec ivSp = new IvParameterSpec(new byte[16]);
+		pSpec = new PBEParameterSpec(salt, iterCount, ivSp);
+		pbeKeySpec = new PBEKeySpec(hash.toCharArray(), salt, iterCount);
+		skey = keyFact.generateSecret(pbeKeySpec);
+		cipher.init(mode, skey, pSpec);
+		return cipher;
+	}
+	
+	public String receiveAuthProxy(Map<String, String> accounts) throws Exception {
+		byte[] buf = new byte[BUFFER_SIZE];
+		DatagramPacket authPack = new DatagramPacket(buf, 0);
+		receive(authPack);
+		byte[] payload = authPack.getData();
+		byte[] proxyID = new byte[PROXY_ID_LEN];
+		System.arraycopy(payload, 0, proxyID, 0, PROXY_ID_LEN);
+		String proxy = new String(proxyID);
+		String hashPassword = accounts.get(proxy);
+		if (hashPassword == null)
+			throw new Exception("Proxy ID not found");
+		
+		byte[] movieNameBytes = new byte[MOVIE_ID_LEN];
+		System.arraycopy(payload, PROXY_ID_LEN, movieNameBytes, 0, MOVIE_ID_LEN);
+		String movieName = new String(movieNameBytes).trim();
+		
+		byte[] pbeBytes = new byte[payload.length-(MOVIE_ID_LEN+PROXY_ID_LEN)];
+		System.arraycopy(payload, PROXY_ID_LEN+MOVIE_ID_LEN, pbeBytes, 0, payload.length-(MOVIE_ID_LEN+PROXY_ID_LEN));
+		
+		Cipher cDec = getPBECipher(hashPassword, Cipher.DECRYPT_MODE);
+		
+		byte[] c = cDec.doFinal(pbeBytes);
+		MessageDigest dg = MessageDigest.getInstance("SHA-1");
+		dg.update(payload, 0, PROXY_ID_LEN + MOVIE_ID_LEN);
+
+		if (!MessageDigest.isEqual(dg.digest(), c)) {
+			throw new Exception("Tampered auth payload.");
+		}
+		return movieName;
+	}
+
+	private static String toHex(byte[] data, int length) {
+		StringBuffer buf = new StringBuffer();
+		for (int i = 0; i != length; i++) {
+			int v = data[i] & 0xff;
+			buf.append(digits.charAt(v >> 4));
+			buf.append(digits.charAt(v & 0xf));
+		}
+		return buf.toString();
 	}
 }

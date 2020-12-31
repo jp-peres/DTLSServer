@@ -2,12 +2,14 @@ package server;
 
 /*
  * Created by
- * Joao Peres n 48320, Luis Silva 54449 
+ * Joao Peres n 48320, Luis Silva n 54449 
  */
 
 import java.io.*;
 import java.net.*;
 import java.nio.ByteBuffer;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Properties;
 import java.util.Random;
 
@@ -19,9 +21,9 @@ class DTLSStreamServer {
 	private static final int NONCE_LENGTH = 4;
 	
 	static public void main( String []args ) throws Exception {
-		if (args.length != 7)
+		if (args.length != 6)
 		{
-			System.out.println("Erro, usar: DTLSStreamServer <movie> <proxy-ip:port> <server-ip:port> <keystore-name> <keystore-pass> <truststore-name> <truststore-pass>");
+			System.out.println("Erro, usar: DTLSStreamServer <proxy-ip:port> <server-ip:port> <keystore-name> <keystore-pass> <truststore-name> <truststore-pass>");
 			System.exit(-1);
 		}
 		InputStream dtlsconf = null;
@@ -32,13 +34,17 @@ class DTLSStreamServer {
 			System.err.println("dtls.conf file not found!");
 			System.exit(1);
 		}
-		SocketAddress proxyAddr = parseSocketAddress(args[1]);
-		SocketAddress serverAddr = parseSocketAddress(args[2]);
+		SocketAddress proxyAddr = parseSocketAddress(args[0]);
+		SocketAddress serverAddr = parseSocketAddress(args[1]);
 		
-		String ksName = args[3];
-		String ksPass = args[4];
-		String tsName = args[5];
-		String tsPass = args[6];
+		Map<String, String> accounts = new HashMap<String, String>();
+		accounts.put("48320", "43f3379a50140fe8584199603ab30e5d2170e3ba3c7d3e37f8ce9936d0190df1");
+		accounts.put("54449", "82f20a16898eae335cd221dd5c320e5d608580e8fba48ab08a8f327d4a34df63");
+		
+		String ksName = args[2];
+		String ksPass = args[3];
+		String tsName = args[4];
+		String tsPass = args[5];
 		
 		String sideType = "SERVER";
 		//TLS_ECDH_ECDSA_WITH_AES_256_GCM_SHA384,TLS_ECDH_RSA_WITH_AES_256_GCM_SHA384,TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384
@@ -52,7 +58,6 @@ class DTLSStreamServer {
 		int size;
 		int count = 0;
 		long time;
-		DataInputStream g = new DataInputStream( new FileInputStream(args[0]) );
 		byte[] buff = new byte[4096];
 		
 		long t0 = System.nanoTime(); // tempo de referencia para este processo
@@ -67,6 +72,10 @@ class DTLSStreamServer {
 		} catch(Exception ex) {
 			ex.printStackTrace();
 		}
+		
+		String movie = imp.receiveAuthProxy(accounts);
+		DataInputStream g = new DataInputStream( new FileInputStream(movie) );
+		
 		while ( g.available() > 0 ) {
 			buff = new byte[4096];
 			Random r = new Random();
